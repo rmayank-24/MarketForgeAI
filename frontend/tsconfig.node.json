@@ -18,5 +18,6 @@
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts"]
+  // Add tailwind.config.ts to this array
+  "include": ["vite.config.ts", "tailwind.config.ts", "postcss.config.js"]
 }
