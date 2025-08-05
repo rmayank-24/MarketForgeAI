@@ -1,0 +1,29 @@
+Secrets
+.env
+backend/.env
+
+Python Backend
+backend/pycache/
+backend/.pytest_cache/
+venv/
+env/
+marketforge_env/
+
+Frontend (Vite/React/Bun)
+frontend/node_modules/
+frontend/dist/
+frontend/bun.lockb
+
+Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+IDE and Editor Config
+.vscode/
+.idea/
+
+OS Files
+.DS_Store
+Thumbs.db
