@@ -3,8 +3,7 @@ import os
 import json
 import tempfile
 from fastapi import FastAPI, Depends, HTTPException, Header, Request, Query, UploadFile, File, Form
-from fastapi.responses import RedirectResponse, HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 from supabase import create_client, Client
 from dotenv import load_dotenv
@@ -51,6 +50,34 @@ CLIENT_SECRETS_CONFIG = {
     }
 }
 SCOPES = ['https://www.googleapis.com/auth/calendar.events']
+
+# --- FastAPI App Initialization ---
+app = FastAPI(title="MarketForge AI API")
+
+# --- NEW: Custom CORS Middleware ---
+# This is a more direct way to handle CORS and should fix the issue.
+@app.middleware("http")
+async def add_cors_header(request: Request, call_next):
+    # For preflight requests (OPTIONS), we send the headers and stop.
+    if request.method == "OPTIONS":
+        return JSONResponse(
+            content={"message": "ok"},
+            headers={
+                "Access-Control-Allow-Origin": FRONTEND_URL,
+                "Access-Control-Allow-Methods": "GET, POST, OPTIONS, PUT, DELETE",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Credentials": "true",
+            },
+        )
+    
+    # For all other requests, we process them and add the header to the response.
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = FRONTEND_URL
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
 
 # --- Configuration & Clients ---
 def get_supabase_client() -> Client:
@@ -127,18 +154,6 @@ def process_document(file: UploadFile) -> Optional[FAISS]:
     finally:
         if 'tmp_path' in locals() and os.path.exists(tmp_path):
             os.remove(tmp_path)
-
-# --- FastAPI App Initialization ---
-app = FastAPI(title="MarketForge AI API")
-
-# --- CORS Middleware (UPDATED FOR DEBUGGING) ---
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # <-- Allow all origins for debugging
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 @app.get("/")
 def health_check():
