@@ -35,7 +35,7 @@ BACKEND_URL = "https://huggingface.co/spaces/mayankrathi0805/MarketForgeAI-Backe
 FRONTEND_URL = "https://market-forge-ai-beryl.vercel.app"
 GOOGLE_CALLBACK_URI = f"{BACKEND_URL}/api/v1/auth/google/callback"
 
-# --- Google OAuth 2.0 Configuration (UPDATED FOR PRODUCTION) ---
+# --- Google OAuth 2.0 Configuration ---
 CLIENT_SECRETS_CONFIG = {
     "web": {
         "client_id": os.environ.get("GOOGLE_CLIENT_ID"),
@@ -131,14 +131,10 @@ def process_document(file: UploadFile) -> Optional[FAISS]:
 # --- FastAPI App Initialization ---
 app = FastAPI(title="MarketForge AI API")
 
-# --- CORS Middleware (UPDATED FOR PRODUCTION) ---
+# --- CORS Middleware (UPDATED FOR DEBUGGING) ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8080", 
-        "http://localhost:5173",
-        "https://market-forge-ai-beryl.vercel.app"
-    ],
+    allow_origins=["*"],  # <-- Allow all origins for debugging
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
