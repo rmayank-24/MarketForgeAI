@@ -13,9 +13,9 @@ from datetime import datetime, timedelta
 import multiprocessing
 import uvicorn
 
-# --- RAG Imports ---
+# --- RAG Imports (UPDATED) ---
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings # <-- Use fastembed
 from langchain_community.document_loaders import PyPDFLoader, UnstructuredWordDocumentLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
@@ -77,9 +77,6 @@ class UserCredentials(BaseModel):
     email: str
     password: str
 
-class ProductRequest(BaseModel):
-    product_idea: str = Field(..., examples=["An artisanal, eco-friendly coffee mug"])
-
 class ScheduleItem(BaseModel):
     day: str
     time: str
@@ -98,7 +95,7 @@ class HistoryItem(BaseModel):
     product_idea: str
     created_at: datetime
 
-# --- RAG Helper Function ---
+# --- RAG Helper Function (UPDATED) ---
 def process_document(file: UploadFile) -> Optional[FAISS]:
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
@@ -117,8 +114,13 @@ def process_document(file: UploadFile) -> Optional[FAISS]:
         documents = loader.load()
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
         chunks = text_splitter.split_documents(documents)
-        embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        
+        # Use the new lightweight, CPU-optimized embedding model
+        embedding_model = FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
+        
+        print("--- Creating vector store from document... ---")
         vector_store = FAISS.from_documents(chunks, embedding_model)
+        print("--- Vector store created successfully. ---")
         return vector_store
     finally:
         if 'tmp_path' in locals() and os.path.exists(tmp_path):
@@ -140,7 +142,6 @@ app.add_middleware(
 @app.get("/")
 def health_check():
     return {"status": "ok"}
-
 
 # --- API Endpoints ---
 @app.post("/api/v1/auth/signup")
@@ -232,7 +233,6 @@ def get_history_item(
             raise e
         raise HTTPException(status_code=500, detail=f"Failed to fetch launch kit details: {str(e)}")
 
-
 @app.get("/api/v1/auth/google/authorize")
 def google_auth_authorize(current_user = Depends(get_current_user)):
     flow = Flow.from_client_config(
@@ -256,10 +256,8 @@ async def google_auth_callback(request: Request, supabase: Client = Depends(get_
         redirect_uri="http://localhost:8000/api/v1/auth/google/callback"
     )
     flow.fetch_token(authorization_response=str(request.url))
-
     credentials = flow.credentials
     user_id = request.query_params.get("state")
-
     creds_data = {
         'user_id': user_id,
         'token': credentials.token,
@@ -269,9 +267,7 @@ async def google_auth_callback(request: Request, supabase: Client = Depends(get_
         'client_secret': credentials.client_secret,
         'scopes': ",".join(credentials.scopes)
     }
-
     supabase.table('user_google_credentials').upsert(creds_data).execute()
-
     return HTMLResponse(content="<script>window.close();</script>")
 
 @app.post("/api/v1/schedule/{kit_id}")
@@ -284,33 +280,25 @@ def schedule_to_calendar(
         creds_response = supabase.table('user_google_credentials').select('*').eq('user_id', str(current_user.id)).execute()
         if not creds_response.data:
             raise HTTPException(status_code=401, detail="User has not authorized Google Calendar access.")
-
         creds_info = creds_response.data[0]
         credentials = Credentials.from_authorized_user_info(creds_info)
         service = build('calendar', 'v3', credentials=credentials)
-
         kit_response = supabase.table('launch_kits').select('schedule, product_idea').eq('id', kit_id).single().execute()
         if not kit_response.data:
             raise HTTPException(status_code=404, detail="Launch kit not found.")
-
         schedule_list = json.loads(kit_response.data['schedule'])
         product_idea = kit_response.data['product_idea']
-
         start_date = datetime.now().date() + timedelta(days=2)
-
         events_created = 0
         for item in schedule_list:
             if not item.get('time') or not item.get('content'):
                 print(f"[WARNING] Skipping invalid schedule item: {item}")
                 continue
-
             day_offset = int(item['day'].split(' ')[1]) - 1
             event_date = start_date + timedelta(days=day_offset)
-
             event_time = datetime.strptime(item['time'], '%I:%M %p').time()
             start_datetime = datetime.combine(event_date, event_time)
             end_datetime = start_datetime + timedelta(hours=1)
-
             event = {
                 'summary': f'Social Post: {product_idea[:30]}...',
                 'description': item['content'],
@@ -319,16 +307,13 @@ def schedule_to_calendar(
             }
             service.events().insert(calendarId='primary', body=event).execute()
             events_created += 1
-
         return {"message": f"Successfully scheduled {events_created} posts to your Google Calendar!"}
-
     except HTTPException as e:
         raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
-
-# --- FINAL FIX FOR WINDOWS ---
+# --- ADD THIS BLOCK BACK FOR RAILWAY DEPLOYMENT ---
 if __name__ == '__main__':
-   multiprocessing.freeze_support()
-   uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=False, workers=1)
+    multiprocessing.freeze_support()
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False, workers=1)
