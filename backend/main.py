@@ -221,7 +221,11 @@ def get_history(
 ):
     try:
         response = supabase.table("launch_kits").select("id, product_idea, created_at").eq("user_id", str(current_user.id)).order("created_at", desc=True).execute()
-        return response.data
+        
+        # FIX: Ensure the data is a list before returning.
+        history_data = response.data if isinstance(response.data, list) else []
+        return JSONResponse(content=history_data)
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch history: {str(e)}")
 
