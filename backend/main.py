@@ -3,8 +3,7 @@ import os
 import json
 import tempfile
 from fastapi import FastAPI, Depends, HTTPException, Header, Request, Query, UploadFile, File, Form
-from fastapi.responses import RedirectResponse, HTMLResponse
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 from supabase import create_client, Client
 from dotenv import load_dotenv
@@ -30,9 +29,14 @@ from agents import generate_full_launch_kit
 load_dotenv()
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
-# --- Google OAuth 2.0 Configuration (for Local Development) ---
-GOOGLE_CALLBACK_URI = "http://localhost:8000/api/v1/auth/google/callback"
+# --- Production URLs ---
+FRONTEND_URL = "https://market-forge-ai-beryl.vercel.app"
+# For local dev with ngrok, the backend URL changes each time
+# We will use the ngrok URL for the Google callback
+NGROK_URL = "https://76c1eefdbcba.ngrok-free.app" # Your specific ngrok URL
+GOOGLE_CALLBACK_URI = f"{NGROK_URL}/api/v1/auth/google/callback"
 
+# --- Google OAuth 2.0 Configuration ---
 CLIENT_SECRETS_CONFIG = {
     "web": {
         "client_id": os.environ.get("GOOGLE_CLIENT_ID"),
@@ -41,10 +45,44 @@ CLIENT_SECRETS_CONFIG = {
         "token_uri": "https://oauth2.googleapis.com/token",
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
         "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET"),
-        "redirect_uris": [ GOOGLE_CALLBACK_URI ]
+        "redirect_uris": [
+            "http://localhost:8000/api/v1/auth/google/callback",
+            GOOGLE_CALLBACK_URI
+        ]
     }
 }
 SCOPES = ['https://www.googleapis.com/auth/calendar.events']
+
+# --- FastAPI App Initialization ---
+app = FastAPI(title="MarketForge AI API")
+
+# --- NEW: Custom CORS Middleware ---
+# This is a more direct way to handle CORS and will fix the issue.
+@app.middleware("http")
+async def add_cors_header(request: Request, call_next):
+    response = await call_next(request)
+    # This header is added to every response
+    response.headers["Access-Control-Allow-Origin"] = FRONTEND_URL
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
+    response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
+
+# This new endpoint handles the browser's "preflight" OPTIONS request
+@app.options("/{rest_of_path:path}")
+async def preflight_handler(request: Request, rest_of_path: str) -> Response:
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": FRONTEND_URL,
+            "Access-Control-Allow-Methods": "GET, POST, OPTIONS, PUT, DELETE",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type",
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
+
+# (The rest of your file remains the same)
+# ... (Configuration, Dependencies, Pydantic Models, etc.)
 
 # --- Configuration & Clients ---
 def get_supabase_client() -> Client:
@@ -119,22 +157,6 @@ def process_document(file: UploadFile) -> Optional[FAISS]:
     finally:
         if 'tmp_path' in locals() and os.path.exists(tmp_path):
             os.remove(tmp_path)
-
-# --- FastAPI App Initialization ---
-app = FastAPI(title="MarketForge AI API")
-
-# --- CORS Middleware (for Local Development) ---
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:8080", 
-        "http://localhost:5173",
-        "https://market-forge-ai-beryl.vercel.app" # <-- Add this line
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 @app.get("/")
 def health_check():
