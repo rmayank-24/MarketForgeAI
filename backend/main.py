@@ -13,9 +13,9 @@ from datetime import datetime, timedelta
 import multiprocessing
 import uvicorn
 
-# --- RAG Imports (REVERTED) ---
+# --- RAG Imports ---
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings # <-- Reverted to HuggingFace
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.document_loaders import PyPDFLoader, UnstructuredWordDocumentLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
@@ -30,7 +30,14 @@ from agents import generate_full_launch_kit
 load_dotenv()
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
-# --- Google OAuth 2.0 Configuration ---
+# --- Production URLs ---
+# Note: For production, it's best practice to set these as environment variables.
+# They are hardcoded here for simplicity as requested.
+BACKEND_URL = "https://huggingface.co/spaces/mayankrathi0805/MarketForgeAI-Backend"
+FRONTEND_URL = "https://market-forge-ai-beryl.vercel.app"
+GOOGLE_CALLBACK_URI = f"{BACKEND_URL}/api/v1/auth/google/callback"
+
+# --- Google OAuth 2.0 Configuration (UPDATED FOR PRODUCTION) ---
 CLIENT_SECRETS_CONFIG = {
     "web": {
         "client_id": os.environ.get("GOOGLE_CLIENT_ID"),
@@ -40,7 +47,8 @@ CLIENT_SECRETS_CONFIG = {
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
         "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET"),
         "redirect_uris": [
-            "http://localhost:8000/api/v1/auth/google/callback"
+            "http://localhost:8000/api/v1/auth/google/callback",
+            GOOGLE_CALLBACK_URI # <-- This now includes your production URL
         ]
     }
 }
@@ -92,7 +100,7 @@ class HistoryItem(BaseModel):
     product_idea: str
     created_at: datetime
 
-# --- RAG Helper Function (REVERTED) ---
+# --- RAG Helper Function ---
 def process_document(file: UploadFile) -> Optional[FAISS]:
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
@@ -112,7 +120,6 @@ def process_document(file: UploadFile) -> Optional[FAISS]:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
         chunks = text_splitter.split_documents(documents)
         
-        # Reverted to the original HuggingFace embedding model
         embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
         
         print("--- Creating vector store from document... ---")
@@ -126,9 +133,14 @@ def process_document(file: UploadFile) -> Optional[FAISS]:
 # --- FastAPI App Initialization ---
 app = FastAPI(title="MarketForge AI API")
 
+# --- CORS Middleware (UPDATED FOR PRODUCTION) ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8080", "http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:8080", 
+        "http://localhost:5173",
+        FRONTEND_URL # <-- This now includes your production frontend URL
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -232,7 +244,7 @@ def google_auth_authorize(current_user = Depends(get_current_user)):
     flow = Flow.from_client_config(
         client_config=CLIENT_SECRETS_CONFIG,
         scopes=SCOPES,
-        redirect_uri="http://localhost:8000/api/v1/auth/google/callback"
+        redirect_uri=GOOGLE_CALLBACK_URI
     )
     authorization_url, state = flow.authorization_url(
         access_type='offline',
@@ -247,7 +259,7 @@ async def google_auth_callback(request: Request, supabase: Client = Depends(get_
     flow = Flow.from_client_config(
         client_config=CLIENT_SECRETS_CONFIG,
         scopes=SCOPES,
-        redirect_uri="http://localhost:8000/api/v1/auth/google/callback"
+        redirect_uri=GOOGLE_CALLBACK_URI
     )
     flow.fetch_token(authorization_response=str(request.url))
     credentials = flow.credentials
@@ -307,7 +319,7 @@ def schedule_to_calendar(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
-# --- ADD THIS BLOCK BACK FOR RAILWAY DEPLOYMENT ---
+# This block is for running the server locally
 if __name__ == '__main__':
     multiprocessing.freeze_support()
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False, workers=1)
