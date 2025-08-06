@@ -137,9 +137,9 @@ app = FastAPI(title="MarketForge AI API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:8080", 
+        "http://localhost:8080",
         "http://localhost:5173",
-        FRONTEND_URL # <-- This now includes your production frontend URL
+        "https://market-forge-ai-beryl.vercel.app" # <-- Add your Vercel URL
     ],
     allow_credentials=True,
     allow_methods=["*"],
