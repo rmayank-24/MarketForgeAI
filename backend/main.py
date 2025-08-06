@@ -13,9 +13,9 @@ from datetime import datetime, timedelta
 import multiprocessing
 import uvicorn
 
-# --- RAG Imports (UPDATED) ---
+# --- RAG Imports (REVERTED) ---
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings # <-- Reverted to HuggingFace
 from langchain_community.document_loaders import PyPDFLoader, UnstructuredWordDocumentLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
@@ -92,7 +92,7 @@ class HistoryItem(BaseModel):
     product_idea: str
     created_at: datetime
 
-# --- RAG Helper Function (UPDATED) ---
+# --- RAG Helper Function (REVERTED) ---
 def process_document(file: UploadFile) -> Optional[FAISS]:
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=file.filename) as tmp:
@@ -112,7 +112,8 @@ def process_document(file: UploadFile) -> Optional[FAISS]:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
         chunks = text_splitter.split_documents(documents)
         
-        embedding_model = FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
+        # Reverted to the original HuggingFace embedding model
+        embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
         
         print("--- Creating vector store from document... ---")
         vector_store = FAISS.from_documents(chunks, embedding_model)
