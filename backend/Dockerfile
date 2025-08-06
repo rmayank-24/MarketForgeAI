@@ -1,5 +1,4 @@
 # --- STAGE 1: Builder ---
-# This stage installs all dependencies and pre-downloads the ML model.
 FROM python:3.11-slim as builder
 
 WORKDIR /app
@@ -15,15 +14,8 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir -r requirements.txt
 
-# --- NEW: Pre-download and cache the embedding model ---
-# This step runs our warmup script to ensure the model is downloaded
-# during the build, preventing runtime downloads and timeouts.
-COPY warmup.py .
-RUN python warmup.py
-
 
 # --- STAGE 2: Final Runtime Image ---
-# This stage creates the final, small image.
 FROM python:3.11-slim
 
 WORKDIR /app

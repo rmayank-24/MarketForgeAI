@@ -15,7 +15,7 @@ import uvicorn
 
 # --- RAG Imports (UPDATED) ---
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings.fastembed import FastEmbedEmbeddings # <-- Use fastembed
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_community.document_loaders import PyPDFLoader, UnstructuredWordDocumentLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
@@ -27,10 +27,7 @@ from googleapiclient.discovery import build
 # Import the combined agent function
 from agents import generate_full_launch_kit
 
-# Load environment variables from .env file
 load_dotenv()
-
-# --- FIX for InsecureTransportError ---
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 # --- Google OAuth 2.0 Configuration ---
@@ -115,7 +112,6 @@ def process_document(file: UploadFile) -> Optional[FAISS]:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
         chunks = text_splitter.split_documents(documents)
         
-        # Use the new lightweight, CPU-optimized embedding model
         embedding_model = FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
         
         print("--- Creating vector store from document... ---")
@@ -129,7 +125,6 @@ def process_document(file: UploadFile) -> Optional[FAISS]:
 # --- FastAPI App Initialization ---
 app = FastAPI(title="MarketForge AI API")
 
-# --- CORS Middleware ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:8080", "http://localhost:5173"],
@@ -138,12 +133,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Health Check Endpoint ---
 @app.get("/")
 def health_check():
     return {"status": "ok"}
 
-# --- API Endpoints ---
 @app.post("/api/v1/auth/signup")
 async def signup(creds: UserCredentials, supabase: Client = Depends(get_supabase_client)):
     try:
