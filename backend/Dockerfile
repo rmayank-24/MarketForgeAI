@@ -1,19 +1,38 @@
-# Use an official Python runtime as a parent image
-FROM python:3.11-slim
+# --- STAGE 1: Builder ---
+# This stage installs all dependencies, including heavy build-time ones.
+FROM python:3.11-slim as builder
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Copy the requirements file into the container
+# Install system dependencies that might be needed for compiling Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential
+
+# Copy only the requirements file first to leverage Docker layer caching
 COPY requirements.txt .
 
-# Install any needed packages specified in requirements.txt
-# We add --no-cache-dir to keep the image size small
+# Create a virtual environment and install dependencies into it
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the backend application code into the container
+
+# --- STAGE 2: Final Runtime Image ---
+# This stage creates the final, small image.
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy the virtual environment with all the installed packages from the builder stage
+COPY --from=builder /opt/venv /opt/venv
+
+# Copy the application code
 COPY . .
 
-# Command to run the application when the container launches
-# Uvicorn will run on port 8000, and 0.0.0.0 makes it accessible
+# Set the path to use the Python interpreter from our virtual environment
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Expose the port the app runs on
+EXPOSE 8000
+
+# Command to run the application
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,9 @@
+.git
+.gitignore
+*.pyc
+venv/
+env/
+marketforge_env/
+tests/
+.pytest_cache/
+.env
