@@ -1,5 +1,14 @@
+// FILE: src/api/client.ts
+// PURPOSE: Updated to use an environment variable for the backend URL.
+
 import axios from 'axios';
 import { useAppStore } from '../state/store';
+
+// This line reads the backend URL from the environment variables.
+// When you deploy to Vercel, it will use the production URL.
+// When you run locally, it will use the fallback 'http://localhost:8000'.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
 
 // --- TYPE DEFINITIONS ---
 export interface ScheduleItem {
@@ -25,14 +34,14 @@ export interface HistoryItem {
 
 // --- AXIOS INSTANCE ---
 const apiClient = axios.create({
-  baseURL: 'http://localhost:8000',
+  baseURL: API_BASE_URL, // <-- Use the dynamic URL here
   timeout: 180000,
 });
 
 // --- INTERCEPTORS ---
 apiClient.interceptors.request.use(
   (config) => {
-    console.log('Making API request:', config.method?.toUpperCase(), config.url);
+    console.log(`Making API request to: ${config.baseURL}${config.url}`);
     const { token } = useAppStore.getState();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
