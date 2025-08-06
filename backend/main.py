@@ -137,7 +137,7 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:8080", 
         "http://localhost:5173",
-        FRONTEND_URL # <-- This now includes your production frontend URL
+        "https://market-forge-ai-beryl.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
