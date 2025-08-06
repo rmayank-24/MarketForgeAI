@@ -3,7 +3,8 @@ import os
 import json
 import tempfile
 from fastapi import FastAPI, Depends, HTTPException, Header, Request, Query, UploadFile, File, Form
-from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
+from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from supabase import create_client, Client
 from dotenv import load_dotenv
@@ -14,7 +15,7 @@ import uvicorn
 
 # --- RAG Imports ---
 from langchain_community.vectorstores import FAISS
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 from langchain_community.document_loaders import PyPDFLoader, UnstructuredWordDocumentLoader, TextLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
@@ -29,12 +30,9 @@ from agents import generate_full_launch_kit
 load_dotenv()
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
-# --- Production URLs ---
-BACKEND_URL = "https://huggingface.co/spaces/mayankrathi0805/MarketForgeAI-Backend"
-FRONTEND_URL = "https://market-forge-ai-beryl.vercel.app"
-GOOGLE_CALLBACK_URI = f"{BACKEND_URL}/api/v1/auth/google/callback"
+# --- Google OAuth 2.0 Configuration (for Local Development) ---
+GOOGLE_CALLBACK_URI = "http://localhost:8000/api/v1/auth/google/callback"
 
-# --- Google OAuth 2.0 Configuration ---
 CLIENT_SECRETS_CONFIG = {
     "web": {
         "client_id": os.environ.get("GOOGLE_CLIENT_ID"),
@@ -43,41 +41,10 @@ CLIENT_SECRETS_CONFIG = {
         "token_uri": "https://oauth2.googleapis.com/token",
         "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
         "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET"),
-        "redirect_uris": [
-            "http://localhost:8000/api/v1/auth/google/callback",
-            GOOGLE_CALLBACK_URI
-        ]
+        "redirect_uris": [ GOOGLE_CALLBACK_URI ]
     }
 }
 SCOPES = ['https://www.googleapis.com/auth/calendar.events']
-
-# --- FastAPI App Initialization ---
-app = FastAPI(title="MarketForge AI API")
-
-# --- NEW: Custom CORS Middleware ---
-# This is a more direct way to handle CORS and should fix the issue.
-@app.middleware("http")
-async def add_cors_header(request: Request, call_next):
-    # For preflight requests (OPTIONS), we send the headers and stop.
-    if request.method == "OPTIONS":
-        return JSONResponse(
-            content={"message": "ok"},
-            headers={
-                "Access-Control-Allow-Origin": FRONTEND_URL,
-                "Access-Control-Allow-Methods": "GET, POST, OPTIONS, PUT, DELETE",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Allow-Credentials": "true",
-            },
-        )
-    
-    # For all other requests, we process them and add the header to the response.
-    response = await call_next(request)
-    response.headers["Access-Control-Allow-Origin"] = FRONTEND_URL
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    return response
-
 
 # --- Configuration & Clients ---
 def get_supabase_client() -> Client:
@@ -145,15 +112,29 @@ def process_document(file: UploadFile) -> Optional[FAISS]:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
         chunks = text_splitter.split_documents(documents)
         
-        embedding_model = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        embedding_model = FastEmbedEmbeddings(model_name="BAAI/bge-small-en-v1.5")
         
-        print("--- Creating vector store from document... ---")
         vector_store = FAISS.from_documents(chunks, embedding_model)
-        print("--- Vector store created successfully. ---")
         return vector_store
     finally:
         if 'tmp_path' in locals() and os.path.exists(tmp_path):
             os.remove(tmp_path)
+
+# --- FastAPI App Initialization ---
+app = FastAPI(title="MarketForge AI API")
+
+# --- CORS Middleware (for Local Development) ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:8080", 
+        "http://localhost:5173",
+        "https://market-forge-ai-beryl.vercel.app" # <-- Add this line
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def health_check():
@@ -307,7 +288,6 @@ def schedule_to_calendar(
         events_created = 0
         for item in schedule_list:
             if not item.get('time') or not item.get('content'):
-                print(f"[WARNING] Skipping invalid schedule item: {item}")
                 continue
             day_offset = int(item['day'].split(' ')[1]) - 1
             event_date = start_date + timedelta(days=day_offset)
