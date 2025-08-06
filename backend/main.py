@@ -31,8 +31,6 @@ load_dotenv()
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 # --- Production URLs ---
-# Note: For production, it's best practice to set these as environment variables.
-# They are hardcoded here for simplicity as requested.
 BACKEND_URL = "https://huggingface.co/spaces/mayankrathi0805/MarketForgeAI-Backend"
 FRONTEND_URL = "https://market-forge-ai-beryl.vercel.app"
 GOOGLE_CALLBACK_URI = f"{BACKEND_URL}/api/v1/auth/google/callback"
@@ -48,7 +46,7 @@ CLIENT_SECRETS_CONFIG = {
         "client_secret": os.environ.get("GOOGLE_CLIENT_SECRET"),
         "redirect_uris": [
             "http://localhost:8000/api/v1/auth/google/callback",
-            GOOGLE_CALLBACK_URI # <-- This now includes your production URL
+            GOOGLE_CALLBACK_URI
         ]
     }
 }
@@ -137,9 +135,9 @@ app = FastAPI(title="MarketForge AI API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:8080",
+        "http://localhost:8080", 
         "http://localhost:5173",
-        "https://market-forge-ai-beryl.vercel.app" # <-- Add your Vercel URL
+        FRONTEND_URL # <-- This now includes your production frontend URL
     ],
     allow_credentials=True,
     allow_methods=["*"],
