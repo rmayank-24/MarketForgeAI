@@ -84,15 +84,19 @@ export const useAppStore = create<AppState>()(
         set({ token: null, user: null, launchKit: null, historyList: null });
       },
 
-      fetchHistory: async () => {
-        set({ isLoading: true, error: null });
-        try {
-            const history = await fetchHistoryList();
-            set({ historyList: history, isLoading: false });
-        } catch (error) {
-            set({ error: error instanceof Error ? error.message : 'Failed to load history', isLoading: false });
-        }
-      },
+fetchHistory: async () => {
+  set({ isLoading: true, error: null });
+  try {
+      const history = await fetchHistoryList();
+      if (Array.isArray(history)) {
+          set({ historyList: history, isLoading: false });
+      } else {
+          set({ error: 'Invalid history data received from server', isLoading: false, historyList: [] });
+      }
+  } catch (error) {
+      set({ error: error instanceof Error ? error.message : 'Failed to load history', isLoading: false, historyList: [] });
+  }
+},
       fetchKitDetails: async (kitId: string) => {
         set({ isLoading: true, error: null, launchKit: null });
         try {

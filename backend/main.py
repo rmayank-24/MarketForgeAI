@@ -4,6 +4,7 @@ import json
 import tempfile
 from fastapi import FastAPI, Depends, HTTPException, Header, Request, Query, UploadFile, File, Form
 from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse, Response
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from supabase import create_client, Client
 from dotenv import load_dotenv
@@ -31,9 +32,8 @@ os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 # --- Production URLs ---
 FRONTEND_URL = "https://market-forge-ai-beryl.vercel.app"
-# For local dev with ngrok, the backend URL changes each time
-# We will use the ngrok URL for the Google callback
-NGROK_URL = "https://76c1eefdbcba.ngrok-free.app" # Your specific ngrok URL
+# Use your permanent ngrok domain here
+NGROK_URL = "https://definite-useful-viper.ngrok-free.app" 
 GOOGLE_CALLBACK_URI = f"{NGROK_URL}/api/v1/auth/google/callback"
 
 # --- Google OAuth 2.0 Configuration ---
@@ -56,33 +56,14 @@ SCOPES = ['https://www.googleapis.com/auth/calendar.events']
 # --- FastAPI App Initialization ---
 app = FastAPI(title="MarketForge AI API")
 
-# --- NEW: Custom CORS Middleware ---
-# This is a more direct way to handle CORS and will fix the issue.
-@app.middleware("http")
-async def add_cors_header(request: Request, call_next):
-    response = await call_next(request)
-    # This header is added to every response
-    response.headers["Access-Control-Allow-Origin"] = FRONTEND_URL
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, PUT, DELETE"
-    response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type"
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    return response
-
-# This new endpoint handles the browser's "preflight" OPTIONS request
-@app.options("/{rest_of_path:path}")
-async def preflight_handler(request: Request, rest_of_path: str) -> Response:
-    return Response(
-        status_code=200,
-        headers={
-            "Access-Control-Allow-Origin": FRONTEND_URL,
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS, PUT, DELETE",
-            "Access-Control-Allow-Headers": "Authorization, Content-Type",
-            "Access-Control-Allow-Credentials": "true",
-        },
-    )
-
-# (The rest of your file remains the same)
-# ... (Configuration, Dependencies, Pydantic Models, etc.)
+# --- CORS Middleware ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[FRONTEND_URL, "http://localhost:5173", NGROK_URL], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- Configuration & Clients ---
 def get_supabase_client() -> Client:
@@ -221,11 +202,8 @@ def get_history(
 ):
     try:
         response = supabase.table("launch_kits").select("id, product_idea, created_at").eq("user_id", str(current_user.id)).order("created_at", desc=True).execute()
-        
-        # FIX: Ensure the data is a list before returning.
         history_data = response.data if isinstance(response.data, list) else []
         return JSONResponse(content=history_data)
-        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch history: {str(e)}")
 
@@ -237,7 +215,6 @@ def get_history_item(
 ):
     try:
         response = supabase.table("launch_kits").select("*").eq("id", kit_id).eq("user_id", str(current_user.id)).single().execute()
-        
         if not response.data:
             raise HTTPException(status_code=404, detail="Launch kit not found or you do not have permission to view it.")
         
@@ -334,7 +311,6 @@ def schedule_to_calendar(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
-# This block is for running the server locally
 if __name__ == '__main__':
     multiprocessing.freeze_support()
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False, workers=1)

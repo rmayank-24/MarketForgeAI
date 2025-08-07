@@ -1,12 +1,12 @@
 // FILE: src/api/client.ts
-// PURPOSE: Updated to use an environment variable for the backend URL.
+// PURPOSE: Configured to use a dynamic backend URL for both local and deployed environments.
 
 import axios from 'axios';
 import { useAppStore } from '../state/store';
 
-// This line reads the backend URL from the environment variables.
-// When you deploy to Vercel, it will use the production URL.
-// When you run locally, it will use the fallback 'http://localhost:8000'.
+// This line reads the backend URL from environment variables.
+// When you deploy to Vercel, it will use the production URL you set.
+// When you run locally, it will default to 'http://localhost:8000'.
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 
@@ -34,7 +34,7 @@ export interface HistoryItem {
 
 // --- AXIOS INSTANCE ---
 const apiClient = axios.create({
-  baseURL: API_BASE_URL, // <-- Use the dynamic URL here
+  baseURL: API_BASE_URL,
   timeout: 180000,
 });
 
@@ -71,7 +71,6 @@ apiClient.interceptors.response.use(
 // --- API FUNCTIONS ---
 export const fetchLaunchKit = async (productIdea: string, file?: File | null): Promise<LaunchKitResponse> => {
   try {
-    // ALWAYS use FormData to ensure a consistent request format for the backend.
     const formData = new FormData();
     formData.append('product_idea', productIdea);
 
@@ -79,7 +78,6 @@ export const fetchLaunchKit = async (productIdea: string, file?: File | null): P
       formData.append('file', file);
     }
 
-    // The backend now only needs to handle multipart/form-data.
     const response = await apiClient.post<LaunchKitResponse>('/api/v1/generate-launch-kit', formData);
     
     return response.data;
